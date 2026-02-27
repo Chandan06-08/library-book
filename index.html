@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumina Books | Expert Recommendations</title>
+  <meta name="description"
+    content="Discover your next favorite read with our curated book recommendations. Beautifully designed for book lovers." />
+</head>
+
+<body>
+  <!-- Dynamic Visuals -->
+  <div id="cursor-glow"></div>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <header>
+    <h1>Lumina Books</h1>
+    <p class="subtitle">Discover hand-picked recommendations curated for you.</p>
+
+    <div class="search-container">
+      <input type="text" id="search-input" placeholder="Search by title, author, or genre..." autocomplete="off">
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Genre</label>
+        <select id="genre-filter">
+          <option value="all">All Genres</option>
+          <option value="Fiction">Fiction</option>
+          <option value="Self-Help">Self-Help</option>
+          <option value="Sci-Fi">Sci-Fi</option>
+          <option value="Thriller">Thriller</option>
+          <option value="Finance">Finance</option>
+          <option value="Education">Education</option>
+          <option value="History">History</option>
+          <option value="Philosophy">Philosophy</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Min Rating</label>
+        <select id="rating-filter">
+          <option value="0">Any Rating</option>
+          <option value="4.5">4.5+ Stars</option>
+          <option value="4.0">4.0+ Stars</option>
+          <option value="3.5">3.5+ Stars</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- Rating Prompt Modal -->
+  <div id="rating-prompt" class="modal-overlay">
+    <div class="prompt-content">
+      <h3>How would you rate this book?</h3>
+      <p id="prompt-book-title"></p>
+      <div class="user-stars" id="user-rating-input">
+        <button data-value="1"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
+            </path>
+          </svg></button>
+        <button data-value="2"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
+            </path>
+          </svg></button>
+        <button data-value="3"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
+            </path>
+          </svg></button>
+        <button data-value="4"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
+            </path>
+          </svg></button>
+        <button data-value="5"><svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z">
+            </path>
+          </svg></button>
+      </div>
+      <button id="submit-rating" class="play-btn" style="color: white; background: #E50914; margin-top: 1rem;">Submit
+        Feedback</button>
+    </div>
+  </div>
+
+
+  <main>
+    <section class="rec-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+        </svg>
+        Popular in Library
+      </h2>
+      <div id="popular-grid" class="book-grid">
+        <!-- Popular books injected here -->
+      </div>
+    </section>
+
+    <section class="rec-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        Recommended for You
+      </h2>
+      <div id="personalized-grid" class="book-grid">
+        <!-- Personalized books injected here -->
+      </div>
+    </section>
+
+    <section class="rec-section">
+      <h2 class="section-title">All Books</h2>
+      <div id="book-grid" class="book-grid">
+        <!-- All books injected here -->
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+
+  <!-- Netflix Style Modal -->
+  <div id="book-modal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="close-modal" id="close-modal">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
+      <div class="modal-hero">
+        <img id="modal-banner" src="" alt="Banner">
+        <div class="modal-hero-overlay"></div>
+        <div class="modal-hero-content">
+          <h2 id="modal-title"></h2>
+          <div class="modal-actions">
+            <a id="modal-read-btn" href="#" target="_blank" class="play-btn">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Read Now
+            </a>
+            <button class="list-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-main-info">
+          <div class="modal-stats">
+            <span id="modal-match" class="match-score">98% Match</span>
+            <span id="modal-year" class="year"></span>
+            <span class="quality-tag">4K</span>
+            <span class="age-tag">PG-13</span>
+          </div>
+
+          <div id="modal-stars" class="star-rating">
+            <!-- Stars injected here -->
+          </div>
+
+          <p id="modal-summary" class="description"></p>
+        </div>
+
+        <div class="modal-sidebar">
+          <p><span>Author:</span> <span id="modal-author" class="sidebar-value"></span></p>
+          <p><span>Genre:</span> <span id="modal-genre" class="sidebar-value"></span></p>
+          <p><span>Availability:</span> <span id="modal-status" class="sidebar-value"></span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
