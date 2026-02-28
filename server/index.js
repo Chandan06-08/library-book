@@ -16,6 +16,14 @@ const { PromptTemplate } = require('@langchain/core/prompts');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
+// Create uploads directory if it doesn't exist
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const METADATA_PATH = path.join(__dirname, 'metadata.json');
+
 console.log('--- Server Startup ---');
 console.log('Gemini API Key configured:', !!process.env.GOOGLE_API_KEY);
 console.log('Groq API Key configured:', !!process.env.GROQ_API_KEY);
@@ -30,25 +38,83 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Serve uploaded books statically
+app.use('/uploads', express.static(UPLOADS_DIR));
+
 const PORT = process.env.PORT || 5000;
-const upload = multer({ storage: multer.memoryStorage() });
 
-const bookCache = new Map();
-const bookMetadata = new Map();
-
-// Initialize the original book metadata
-bookMetadata.set('978-0517543054', {
-    isbn: '978-0517543054',
-    title: 'The Psychology of Money',
-    author: 'Morgan Housel',
-    year: '2020',
-    genre: 'Finance'
+// Multer Disk Storage Configuration
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const filename = uniqueSuffix + '-' + file.originalname;
+        cb(null, filename);
+    }
 });
+const upload = multer({ storage: storage });
 
-async function processBook(bookId, buffer, filename) {
-    console.log(`Processing new book: ${filename} (ID: ${bookId})`);
+const bookCache = new Map(); // Vector store cache (RAM only)
+let bookMetadata = new Map(); // Global book registry
+
+// Load persistent metadata from file
+function loadMetadata() {
+    try {
+        if (fs.existsSync(METADATA_PATH)) {
+            const data = fs.readFileSync(METADATA_PATH, 'utf8');
+            const entries = JSON.parse(data);
+            bookMetadata = new Map(Object.entries(entries));
+            console.log(`Loaded metadata for ${bookMetadata.size} books from ${METADATA_PATH}.`);
+        }
+    } catch (e) {
+        console.error('Error loading metadata:', e);
+    }
+
+    // Default: Ensure original book is in metadata
+    if (!bookMetadata.has('978-0517543054')) {
+        bookMetadata.set('978-0517543054', {
+            isbn: '978-0517543054',
+            title: 'The Psychology of Money',
+            author: 'Morgan Housel',
+            year: '2020',
+            genre: 'Finance',
+            available: true,
+            summary: "Morgan Housel's masterpiece on finance and human behavior.",
+            image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800",
+            localPath: path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf')
+        });
+        console.log('Added default book "The Psychology of Money" to metadata.');
+    }
+}
+
+function saveMetadata() {
+    try {
+        const entries = Object.fromEntries(bookMetadata);
+        fs.writeFileSync(METADATA_PATH, JSON.stringify(entries, null, 2));
+        console.log(`Metadata saved to ${METADATA_PATH}.`);
+    } catch (e) {
+        console.error('Error saving metadata:', e);
+    }
+}
+
+loadMetadata();
+
+async function processBook(bookId, filePath, metadata) {
+    if (bookCache.has(bookId)) {
+        console.log(`Vector store for book ID ${bookId} already in cache.`);
+        return bookCache.get(bookId);
+    }
+
+    console.log(`Indexing book: ${metadata.title} (ID: ${bookId})`);
+    if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found at: ${filePath}`);
+    }
+
+    const dataBuffer = fs.readFileSync(filePath);
     console.log('Parsing PDF...');
-    const pdfData = await pdf(buffer);
+    const pdfData = await pdf(dataBuffer);
     const fullText = pdfData.text;
     console.log(`Extracted ${fullText.length} characters`);
 
@@ -69,46 +135,16 @@ async function processBook(bookId, buffer, filename) {
     const vectorStore = await MemoryVectorStore.fromDocuments(docs, embeddings);
     console.log('SUCCESS: Vector store ready and cached');
     bookCache.set(bookId, vectorStore);
-
-    // Store metadata
-    bookMetadata.set(bookId, {
-        isbn: bookId,
-        title: filename.replace('.pdf', '').replace(/-/g, ' '),
-        author: "Uploaded PDF",
-        year: new Date().getFullYear().toString(),
-        genre: "Professional",
-        rating: 5.0,
-        numRatings: 1,
-        available: true,
-        summary: `Dynamic book content from uploaded file: ${filename}`,
-        image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800"
-    });
-
-    return bookMetadata.get(bookId);
+    return vectorStore;
 }
 
 async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
-    let bookPath = null;
-    if (bookId === '978-0517543054') {
-        bookPath = path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf');
+    const metadata = bookMetadata.get(bookId);
+    if (!metadata) {
+        throw new Error('Book not found in system library.');
     }
 
-    let vectorStore;
-
-    if (bookCache.has(bookId)) {
-        console.log(`Using cached vector store for book ID: ${bookId}`);
-        vectorStore = bookCache.get(bookId);
-    } else if (bookPath && fs.existsSync(bookPath)) {
-        console.log('First time processing original book from file...');
-        const dataBuffer = fs.readFileSync(bookPath);
-        await processBook(bookId, dataBuffer, path.basename(bookPath));
-        vectorStore = bookCache.get(bookId);
-    } else {
-        console.error(`Book ID: ${bookId} not found in cache. Cache keys:`, Array.from(bookCache.keys()));
-        throw new Error('This book has not been processed yet. Please try again in 5 seconds.');
-    }
-
-    const metadata = bookMetadata.get(bookId) || { title: "Unknown Book", author: "Unknown Author" };
+    const vectorStore = await processBook(bookId, metadata.localPath, metadata);
 
     console.log(`Retrieving relevant docs for question: ${userQuestion}`);
     const retriever = vectorStore.asRetriever(4);
@@ -198,13 +234,39 @@ app.post('/api/upload', upload.single('book'), async (req, res) => {
         if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded.' });
 
         const bookId = 'up-' + Date.now();
-        const metadata = await processBook(bookId, req.file.buffer, req.file.originalname);
+        const metadata = {
+            isbn: bookId,
+            title: req.file.originalname.replace('.pdf', '').replace(/-/g, ' '),
+            author: "Uploaded PDF",
+            year: new Date().getFullYear().toString(),
+            genre: "Professional",
+            rating: 5.0,
+            numRatings: 1,
+            available: true,
+            summary: `Content from uploaded file: ${req.file.originalname}`,
+            image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800",
+            localPath: req.file.path,
+            filename: req.file.filename
+        };
 
+        // Cache metadata persistently
+        bookMetadata.set(bookId, metadata);
+        saveMetadata();
+
+        // Start processing background
+        processBook(bookId, metadata.localPath, metadata).catch(e => console.error('BG Process Error:', e));
+
+        // Return metadata so frontend can add it to library
         res.json({ success: true, book: metadata });
     } catch (e) {
         console.error('Upload error:', e);
         res.status(500).json({ error: 'Failed to process uploaded PDF.' });
     }
+});
+
+// Added route to get existing metadata list for frontend
+app.get('/api/books', (req, res) => {
+    res.json(Array.from(bookMetadata.values()));
 });
 
 app.post('/api/chat', async (req, res) => {

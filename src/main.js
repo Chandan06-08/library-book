@@ -128,6 +128,33 @@ document.addEventListener('mousemove', (e) => {
 });
 searchInput.addEventListener('input', () => handleSearch());
 
+// Existing library logic...
+async function loadPersistedBooks() {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/api/books');
+    const serverBooks = await response.json();
+
+    serverBooks.forEach(serverBook => {
+      // Don't add if already in BASE_INVENTORY (Psychology of Money)
+      if (BASE_INVENTORY.some(b => b.isbn === serverBook.isbn)) return;
+
+      // Fix PDF URL if it's an uploaded book
+      if (serverBook.isbn.startsWith('up-') && serverBook.filename) {
+        serverBook.pdfUrl = `http://127.0.0.1:5000/uploads/${serverBook.filename}`;
+      }
+
+      LIBRARY_INVENTORY.unshift(serverBook);
+    });
+
+    console.log(`Synced ${serverBooks.length} books from server.`);
+    handleSearch();
+  } catch (e) {
+    console.warn("Could not sync books from server. Offline mode.");
+  }
+}
+
+loadPersistedBooks();
+
 // Rating Prompt Logic
 promptStars.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -167,7 +194,10 @@ pdfUploadInput.addEventListener('change', async (e) => {
       // Add the new book to library
       const newBook = data.book;
       console.log('Successfully uploaded and indexed:', newBook.title);
-      newBook.pdfUrl = URL.createObjectURL(file); // Temporary preview link
+
+      // Set the server-provided PDF URL
+      newBook.pdfUrl = `http://127.0.0.1:5000/uploads/${newBook.filename}`;
+
       LIBRARY_INVENTORY.unshift(newBook); // Put at start
       handleSearch();
       alert(`Successfully uploaded "${newBook.title}"! You can now chat with it.`);
