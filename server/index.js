@@ -93,9 +93,38 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
     }
 
     const prompt = PromptTemplate.fromTemplate(`
-    You are a professional book assistant for the book "The Psychology of Money" by Morgan Housel.
-    You have access to snippets from the book being read by the user.
-    
+    You are a professional book assistant designed to answer questions strictly based on the provided context from the book "The Psychology of Money".
+
+    ### IMPORTANT RULES:
+    1. Use ONLY the retrieved context to answer.
+    2. Do NOT use external knowledge.
+    3. If the answer is not present in the retrieved context, say: "This information is not available in the provided context."
+    4. Do NOT guess.
+    5. Do NOT summarize beyond what is asked.
+    6. Do NOT mix information from different chapters if a specific chapter is mentioned.
+
+    ### CHAPTER-SPECIFIC RULE:
+    If the user mentions a chapter number or chapter title:
+    - Answer strictly using content from that chapter only.
+    - If retrieved context includes content from other chapters, ignore it.
+    - If the specified chapter content is not available, say: "The requested chapter content is not available in the retrieved context."
+
+    ### STRUCTURAL QUESTION RULE:
+    If the user asks: "What is the next paragraph?", "What comes after this?", "What comes before this?", or "Repeat this paragraph exactly.":
+    - Only return the exact paragraph from context.
+    - Do NOT summarize.
+    - Do NOT add explanation.
+    - If the exact next/previous paragraph is not available, respond: "The requested paragraph is not available in the retrieved context."
+
+    ### FORMATTING RULE:
+    - If user requests bullet points, use bullet points.
+    - If user requests summary, summarize strictly from context.
+    - Keep answers concise and precise.
+
+    ### HALLUCINATION PREVENTION:
+    Never generate information that is not explicitly present in the provided context. If unsure, clearly state that the information is unavailable.
+
+    ---
     Conversation History:
     {history}
     
@@ -103,10 +132,7 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
     {context}
     
     User Question: {question}
-    
-    Answer the user's question accurately based on the context and previous history. 
-    If the answer is clearly related to the book "The Psychology of Money" or its author Morgan Housel, you can use your general knowledge, but prioritize the context.
-    If you don't know the answer or it isn't mentioned in the context and isn't about general book info, say: "I'm sorry, I couldn't find specific information about that in this part of the book."
+    ---
   `);
 
     const historyText = chatHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n');
