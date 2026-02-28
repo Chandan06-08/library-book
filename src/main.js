@@ -109,6 +109,10 @@ const chatInput = document.getElementById('chat-input');
 const sendChatBtn = document.getElementById('send-chat');
 const chatMessages = document.getElementById('chat-messages');
 const chatBookTitle = document.getElementById('chat-book-title');
+const uploadBtn = document.getElementById('upload-btn');
+const pdfUploadInput = document.getElementById('pdf-upload');
+const uploadIcon = uploadBtn.querySelector('svg');
+const uploadText = uploadBtn.lastChild;
 
 // Cursor Glow Effect
 document.addEventListener('mousemove', (e) => {
@@ -133,6 +137,51 @@ promptStars.forEach(btn => {
       s.classList.toggle('selected', starVal <= selectedUserRating);
     });
   });
+});
+
+// Upload Logic
+uploadBtn.addEventListener('click', () => pdfUploadInput.click());
+
+pdfUploadInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('book', file);
+
+  // Loading State
+  uploadBtn.disabled = true;
+  const originalText = uploadText.textContent;
+  uploadText.textContent = "Processing...";
+  uploadBtn.style.opacity = "0.7";
+
+  try {
+    const response = await fetch('http://localhost:5000/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      // Add the new book to library
+      const newBook = data.book;
+      newBook.pdfUrl = URL.createObjectURL(file); // Temporary preview link
+      LIBRARY_INVENTORY.unshift(newBook); // Put at start
+      handleSearch();
+      alert(`Successfully uploaded "${newBook.title}"! You can now chat with it.`);
+      openModal(newBook);
+    } else {
+      alert(data.error || "Failed to upload PDF.");
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert("Backend server is offline. Could not upload book.");
+  } finally {
+    uploadBtn.disabled = false;
+    uploadText.textContent = originalText;
+    uploadBtn.style.opacity = "1";
+    pdfUploadInput.value = '';
+  }
 });
 
 submitRatingBtn.addEventListener('click', () => {

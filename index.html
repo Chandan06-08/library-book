@@ -23,6 +23,13 @@
 
     <div class="search-container">
       <input type="text" id="search-input" placeholder="Search by title, author, or genre..." autocomplete="off">
+      <button id="upload-btn" class="upload-btn" title="Upload your own PDF book">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4M17 8l-5-5-5 5M12 3v12" />
+        </svg>
+        Upload PDF
+      </button>
+      <input type="file" id="pdf-upload" accept=".pdf" style="display: none;">
     </div>
 
     <div class="filter-bar">

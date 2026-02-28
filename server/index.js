@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
 const pdf = require('pdf-parse');
+const multer = require('multer');
 
 // Verified modular LangChain packages
 const { RecursiveCharacterTextSplitter } = require('@langchain/textsplitters');
@@ -25,11 +26,58 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
+const upload = multer({ storage: multer.memoryStorage() });
 
 const bookCache = new Map();
+const bookMetadata = new Map();
+
+async function processBook(bookId, buffer, filename) {
+    console.log(`Processing new book: ${filename} (ID: ${bookId})`);
+    console.log('Parsing PDF...');
+    const pdfData = await pdf(buffer);
+    const fullText = pdfData.text;
+    console.log(`Extracted ${fullText.length} characters`);
+
+    console.log('Splitting text into chunks...');
+    const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 3000,
+        chunkOverlap: 500,
+    });
+    const docs = await splitter.createDocuments([fullText]);
+    console.log(`Created ${docs.length} document chunks`);
+
+    console.log('--- Starting Embedding Process (this can take ~30 seconds) ---');
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+        apiKey: (process.env.GOOGLE_API_KEY || '').trim(),
+        modelName: "gemini-embedding-001",
+    });
+
+    const vectorStore = await MemoryVectorStore.fromDocuments(docs, embeddings);
+    console.log('SUCCESS: Vector store ready and cached');
+    bookCache.set(bookId, vectorStore);
+
+    // Store metadata
+    bookMetadata.set(bookId, {
+        isbn: bookId,
+        title: filename.replace('.pdf', '').replace(/-/g, ' '),
+        author: "Uploaded PDF",
+        year: new Date().getFullYear().toString(),
+        genre: "Professional",
+        rating: 5.0,
+        numRatings: 1,
+        available: true,
+        summary: `Dynamic book content from uploaded file: ${filename}`,
+        image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800"
+    });
+
+    return bookMetadata.get(bookId);
+}
 
 async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
-    const bookPath = path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf');
+    let bookPath = null;
+    if (bookId === '978-0517543054') {
+        bookPath = path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf');
+    }
 
     console.log(`Starting RAG process for book: ${bookPath}`);
 
@@ -43,31 +91,14 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
     if (bookCache.has(bookId)) {
         console.log('Using cached vector store');
         vectorStore = bookCache.get(bookId);
-    } else {
-        console.log('Reading PDF file...');
+    } else if (bookPath && fs.existsSync(bookPath)) {
+        console.log('Reading known book from file...');
         const dataBuffer = fs.readFileSync(bookPath);
-        console.log('Parsing PDF...');
-        const pdfData = await pdf(dataBuffer);
-        const fullText = pdfData.text;
-        console.log(`Extracted ${fullText.length} characters`);
-
-        console.log('Splitting text into chunks...');
-        const splitter = new RecursiveCharacterTextSplitter({
-            chunkSize: 3000,
-            chunkOverlap: 500,
-        });
-        const docs = await splitter.createDocuments([fullText]);
-        console.log(`Created ${docs.length} document chunks`);
-
-        console.log('--- Starting Embedding Process (this can take ~30 seconds) ---');
-        const embeddings = new GoogleGenerativeAIEmbeddings({
-            apiKey: (process.env.GOOGLE_API_KEY || '').trim(),
-            modelName: "gemini-embedding-001",
-        });
-
-        vectorStore = await MemoryVectorStore.fromDocuments(docs, embeddings);
-        console.log('SUCCESS: Vector store ready and cached');
-        bookCache.set(bookId, vectorStore);
+        await processBook(bookId, dataBuffer, path.basename(bookPath));
+        vectorStore = bookCache.get(bookId);
+    } else {
+        console.error(`Book NOT found. Cache: ${bookCache.has(bookId)}, Path: ${bookPath}`);
+        throw new Error('Book file not found or not uploaded yet.');
     }
 
     console.log(`Retrieving relevant docs for question: ${userQuestion}`);
@@ -149,6 +180,20 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
 
 app.get('/', (req, res) => {
     res.send('RAG Server is running. Use POST /api/chat for interaction.');
+});
+
+app.post('/api/upload', upload.single('book'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded.' });
+
+        const bookId = 'up-' + Date.now();
+        const metadata = await processBook(bookId, req.file.buffer, req.file.originalname);
+
+        res.json({ success: true, book: metadata });
+    } catch (e) {
+        console.error('Upload error:', e);
+        res.status(500).json({ error: 'Failed to process uploaded PDF.' });
+    }
 });
 
 app.post('/api/chat', async (req, res) => {
