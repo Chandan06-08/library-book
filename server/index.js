@@ -36,6 +36,15 @@ const upload = multer({ storage: multer.memoryStorage() });
 const bookCache = new Map();
 const bookMetadata = new Map();
 
+// Initialize the original book metadata
+bookMetadata.set('978-0517543054', {
+    isbn: '978-0517543054',
+    title: 'The Psychology of Money',
+    author: 'Morgan Housel',
+    year: '2020',
+    genre: 'Finance'
+});
+
 async function processBook(bookId, buffer, filename) {
     console.log(`Processing new book: ${filename} (ID: ${bookId})`);
     console.log('Parsing PDF...');
@@ -84,27 +93,22 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
         bookPath = path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf');
     }
 
-    console.log(`Starting RAG process for book: ${bookPath}`);
-
-    if (!fs.existsSync(bookPath)) {
-        console.error(`File NOT found at: ${bookPath}`);
-        throw new Error('Book file not found on server.');
-    }
-
     let vectorStore;
 
     if (bookCache.has(bookId)) {
-        console.log('Using cached vector store');
+        console.log(`Using cached vector store for book ID: ${bookId}`);
         vectorStore = bookCache.get(bookId);
     } else if (bookPath && fs.existsSync(bookPath)) {
-        console.log('Reading known book from file...');
+        console.log('First time processing original book from file...');
         const dataBuffer = fs.readFileSync(bookPath);
         await processBook(bookId, dataBuffer, path.basename(bookPath));
         vectorStore = bookCache.get(bookId);
     } else {
-        console.error(`Book NOT found. Cache: ${bookCache.has(bookId)}, Path: ${bookPath}`);
-        throw new Error('Book file not found or not uploaded yet.');
+        console.error(`Book ID: ${bookId} not found in cache. Cache keys:`, Array.from(bookCache.keys()));
+        throw new Error('This book has not been processed yet. Please try again in 5 seconds.');
     }
+
+    const metadata = bookMetadata.get(bookId) || { title: "Unknown Book", author: "Unknown Author" };
 
     console.log(`Retrieving relevant docs for question: ${userQuestion}`);
     const retriever = vectorStore.asRetriever(4);
@@ -129,7 +133,7 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
     }
 
     const prompt = PromptTemplate.fromTemplate(`
-    You are a professional book assistant designed to answer questions strictly based on the provided context from the book "The Psychology of Money".
+    You are a professional book assistant designed to answer questions strictly based on the provided context from the book "{title}" by {author}.
 
     ### IMPORTANT RULES:
     1. Use ONLY the retrieved context to answer.
@@ -175,6 +179,8 @@ async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
 
     const chain = prompt.pipe(model);
     const response = await chain.invoke({
+        title: metadata.title,
+        author: metadata.author,
         context: context,
         question: userQuestion,
         history: historyText || "No previous history."
@@ -236,6 +242,8 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`RAG Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`RAG Server explicitly binding to 0.0.0.0 on port ${PORT}`);
+    console.log(`Available at: http://127.0.0.1:${PORT}`);
+    console.log('--- READY FOR CONNECTIONS ---');
 });

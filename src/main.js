@@ -156,7 +156,8 @@ pdfUploadInput.addEventListener('change', async (e) => {
   uploadBtn.style.opacity = "0.7";
 
   try {
-    const response = await fetch('http://localhost:5000/api/upload', {
+    console.log('Sending upload request to backend...');
+    const response = await fetch('http://127.0.0.1:5000/api/upload', {
       method: 'POST',
       body: formData
     });
@@ -165,17 +166,19 @@ pdfUploadInput.addEventListener('change', async (e) => {
     if (data.success) {
       // Add the new book to library
       const newBook = data.book;
+      console.log('Successfully uploaded and indexed:', newBook.title);
       newBook.pdfUrl = URL.createObjectURL(file); // Temporary preview link
       LIBRARY_INVENTORY.unshift(newBook); // Put at start
       handleSearch();
       alert(`Successfully uploaded "${newBook.title}"! You can now chat with it.`);
       openModal(newBook);
     } else {
+      console.error('Server upload error:', data.error);
       alert(data.error || "Failed to upload PDF.");
     }
   } catch (error) {
-    console.error('Upload error:', error);
-    alert("Backend server is offline. Could not upload book.");
+    console.error('Network/Upload Error:', error);
+    alert("Backend server is offline. Please ensure the server is running on port 5000 and CORS is allowed.");
   } finally {
     uploadBtn.disabled = false;
     uploadText.textContent = originalText;
@@ -366,7 +369,8 @@ async function handleSendMessage() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    const response = await fetch('http://localhost:5000/api/chat', {
+    console.log('Sending chat request to:', currentBookId);
+    const response = await fetch('http://127.0.0.1:5000/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
