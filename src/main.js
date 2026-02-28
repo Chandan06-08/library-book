@@ -264,6 +264,7 @@ function handleSearch() {
 }
 
 // --- CHATBOT LOGIC ---
+let chatHistory = [];
 
 function appendMessage(text, isUser = false) {
   const msgDiv = document.createElement('div');
@@ -305,6 +306,7 @@ async function handleSendMessage() {
 
   const currentBookId = activeBook.isbn; // Use ISBN as ID for caching
   appendMessage(text, true);
+  const userMessage = { role: 'user', text: text };
   chatInput.value = '';
 
   // Simulate AI Thinking
@@ -322,7 +324,8 @@ async function handleSendMessage() {
       },
       body: JSON.stringify({
         bookId: currentBookId,
-        message: text
+        message: text,
+        history: chatHistory
       })
     });
 
@@ -333,6 +336,10 @@ async function handleSendMessage() {
       appendMessage(`Error: ${data.error}`, false);
     } else {
       appendMessage(data.response, false);
+      chatHistory.push(userMessage);
+      chatHistory.push({ role: 'assistant', text: data.response });
+      // Keep only last 10 messages for speed (5 rounds of Q&A)
+      if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
     }
   } catch (error) {
     chatMessages.removeChild(typingDiv);
@@ -349,6 +356,7 @@ openChatBtn.addEventListener('click', () => {
     chatMessages.innerHTML = '';
     chatMessages.appendChild(welcomeMsg);
     welcomeMsg.textContent = `Hi! I'm your automated assistant for "${activeBook.title}". How can I help you today?`;
+    chatHistory = []; // Reset history for new book session
 
     chatWidget.classList.add('active');
   }

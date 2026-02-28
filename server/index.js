@@ -28,7 +28,7 @@ const PORT = process.env.PORT || 5000;
 
 const bookCache = new Map();
 
-async function getRAGResponse(bookId, userQuestion) {
+async function getRAGResponse(bookId, userQuestion, chatHistory = []) {
     const bookPath = path.join(__dirname, '..', 'public', 'books', 'The-Psychology-of-Money-Morgan-Housel.pdf');
 
     console.log(`Starting RAG process for book: ${bookPath}`);
@@ -96,20 +96,26 @@ async function getRAGResponse(bookId, userQuestion) {
     You are a professional book assistant for the book "The Psychology of Money" by Morgan Housel.
     You have access to snippets from the book being read by the user.
     
-    Context:
+    Conversation History:
+    {history}
+    
+    Context from the book:
     {context}
     
     User Question: {question}
     
-    Answer the user's question accurately based on the provided context. 
+    Answer the user's question accurately based on the context and previous history. 
     If the answer is clearly related to the book "The Psychology of Money" or its author Morgan Housel, you can use your general knowledge, but prioritize the context.
     If you don't know the answer or it isn't mentioned in the context and isn't about general book info, say: "I'm sorry, I couldn't find specific information about that in this part of the book."
   `);
+
+    const historyText = chatHistory.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n');
 
     const chain = prompt.pipe(model);
     const response = await chain.invoke({
         context: context,
         question: userQuestion,
+        history: historyText || "No previous history."
     });
 
     return response.content;
@@ -120,7 +126,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
-    const { bookId, message } = req.body;
+    const { bookId, message, history } = req.body;
     console.log(`Received message for book ${bookId}: ${message}`);
 
     if (!message) {
@@ -134,7 +140,7 @@ app.post('/api/chat', async (req, res) => {
     }
 
     try {
-        const aiResponse = await getRAGResponse(bookId || 'default_book', message);
+        const aiResponse = await getRAGResponse(bookId || 'default_book', message, history || []);
         res.json({ response: aiResponse });
     } catch (error) {
         console.error('--- EXCEPTION IN RAG PROCESS ---');
