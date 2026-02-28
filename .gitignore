@@ -11,6 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+server/.env
+*.log
+server_log.txt
+server_stdout.log
+server_stderr.log
+debug_*.js
+models_list.json
+test_out*.txt
 
 # Editor directories and files
 .vscode/*

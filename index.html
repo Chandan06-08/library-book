@@ -139,12 +139,18 @@
         <div class="modal-hero-content">
           <h2 id="modal-title"></h2>
           <div class="modal-actions">
-            <a id="modal-read-btn" href="#" target="_blank" class="play-btn">
+            <a id="modal-read-btn" href="#" target="_self" class="play-btn">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
               Read Now
             </a>
+            <button id="open-chat-btn" class="chat-toggle-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              Chat
+            </button>
             <button class="list-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14M5 12h14" />
@@ -176,6 +182,38 @@
           <p><span>Availability:</span> <span id="modal-status" class="sidebar-value"></span></p>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Chat Widget -->
+  <div id="chat-widget" class="chat-container">
+    <div class="chat-header">
+      <div class="chat-header-info">
+        <div class="ai-avatar">AI</div>
+        <div>
+          <h4 id="chat-book-title">Book Assistant</h4>
+          <span class="status-indicator">Online</span>
+        </div>
+      </div>
+      <button id="close-chat" class="close-chat-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      <!-- Messages injected here -->
+      <div class="message ai-message">
+        Hello! I'm your reading assistant. Ask me anything about this book!
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Ask about the plot, author, or themes..." autocomplete="off">
+      <button id="send-chat" class="send-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+        </svg>
+      </button>
     </div>
   </div>
 </body>

@@ -101,6 +101,15 @@ const promptStars = document.querySelectorAll('#user-rating-input button');
 let activeBook = null;
 let selectedUserRating = 0;
 
+// Chat Elements
+const chatWidget = document.getElementById('chat-widget');
+const openChatBtn = document.getElementById('open-chat-btn');
+const closeChatBtn = document.getElementById('close-chat');
+const chatInput = document.getElementById('chat-input');
+const sendChatBtn = document.getElementById('send-chat');
+const chatMessages = document.getElementById('chat-messages');
+const chatBookTitle = document.getElementById('chat-book-title');
+
 // Cursor Glow Effect
 document.addEventListener('mousemove', (e) => {
   if (cursorGlow) {
@@ -179,6 +188,7 @@ function openModal(book) {
 
 function handleCloseBook() {
   modal.classList.remove('active');
+  chatWidget.classList.remove('active'); // Close chat when modal closes
   document.body.style.overflow = '';
   if (activeBook) {
     promptTitle.textContent = activeBook.title;
@@ -253,4 +263,105 @@ function handleSearch() {
   renderGrids(filteredAll, personalized, popular);
 }
 
+// --- CHATBOT LOGIC ---
+
+function appendMessage(text, isUser = false) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+  msgDiv.textContent = text;
+  chatMessages.appendChild(msgDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function getMockAIResponse(userInput, book) {
+  const input = userInput.toLowerCase();
+
+  if (input.includes('who') && input.includes('author')) {
+    return `The author of "${book.title}" is ${book.author}. Would you like to know more about their other works?`;
+  }
+
+  if (input.includes('summary') || input.includes('about') || input.includes('plot')) {
+    return `"${book.title}" is about: ${book.summary}`;
+  }
+
+  if (input.includes('year') || input.includes('published')) {
+    return `This book was published in ${book.year}. It's considered a classic in the ${book.genre} genre.`;
+  }
+
+  if (input.includes('rating') || input.includes('good')) {
+    return `"${book.title}" has a rating of ${book.rating}/5 stars from ${book.numRatings} readers. It's highly recommended!`;
+  }
+
+  if (input.includes('hello') || input.includes('hi')) {
+    return `Hello! I'm your digital librarian. I can tell you about the plot, author, or ratings of "${book.title}". What's on your mind?`;
+  }
+
+  return `That's an interesting question about "${book.title}". While I'm still learning, I can tell you it's a ${book.genre} book by ${book.author}. You might enjoy its unique perspective on ${book.summary.split(' ').slice(0, 5).join(' ')}...`;
+}
+
+async function handleSendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || !activeBook) return;
+
+  const currentBookId = activeBook.isbn; // Use ISBN as ID for caching
+  appendMessage(text, true);
+  chatInput.value = '';
+
+  // Simulate AI Thinking
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'message ai-message';
+  typingDiv.textContent = '... Analyzing book context ...';
+  chatMessages.appendChild(typingDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    const response = await fetch('http://localhost:5000/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bookId: currentBookId,
+        message: text
+      })
+    });
+
+    const data = await response.json();
+    chatMessages.removeChild(typingDiv);
+
+    if (data.error) {
+      appendMessage(`Error: ${data.error}`, false);
+    } else {
+      appendMessage(data.response, false);
+    }
+  } catch (error) {
+    chatMessages.removeChild(typingDiv);
+    appendMessage("The assistant is currently offline. Please make sure the backend server is running and your API key is configured.", false);
+    console.error('Chat Error:', error);
+  }
+}
+
+openChatBtn.addEventListener('click', () => {
+  if (activeBook) {
+    chatBookTitle.textContent = `${activeBook.title} Assistant`;
+    // Clear previous chat except welcome message
+    const welcomeMsg = chatMessages.firstElementChild;
+    chatMessages.innerHTML = '';
+    chatMessages.appendChild(welcomeMsg);
+    welcomeMsg.textContent = `Hi! I'm your automated assistant for "${activeBook.title}". How can I help you today?`;
+
+    chatWidget.classList.add('active');
+  }
+});
+
+closeChatBtn.addEventListener('click', () => {
+  chatWidget.classList.remove('active');
+});
+
+sendChatBtn.addEventListener('click', handleSendMessage);
+chatInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleSendMessage();
+});
+
 handleSearch();
+
