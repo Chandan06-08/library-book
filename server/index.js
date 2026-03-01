@@ -32,7 +32,7 @@ console.log('---------------------');
 const app = express();
 app.use(cors({
     origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -267,6 +267,47 @@ app.post('/api/upload', upload.single('book'), async (req, res) => {
 // Added route to get existing metadata list for frontend
 app.get('/api/books', (req, res) => {
     res.json(Array.from(bookMetadata.values()));
+});
+
+// --- RATING ENDPOINT ---
+// Accepts { isbn, userRating } and updates the book's running average + numRatings
+app.post('/api/rate', (req, res) => {
+    const { isbn, userRating } = req.body;
+
+    if (!isbn || typeof userRating !== 'number' || userRating < 1 || userRating > 5) {
+        return res.status(400).json({ error: 'Invalid isbn or userRating (must be 1-5).' });
+    }
+
+    // Find the book in metadata (only persisted/uploaded books have full metadata)
+    // For books not in metadata, we create a lightweight rating-only entry
+    let meta = bookMetadata.get(isbn);
+    if (!meta) {
+        // Create a stub entry just to track ratings for pre-seeded books
+        meta = { isbn, ratings: [], numRatings: 0, rating: userRating };
+    }
+
+    // Initialise ratings array if missing (older entries)
+    if (!Array.isArray(meta.ratings)) {
+        // Reconstruct from existing numRatings & rating so we don't lose history
+        meta.ratings = meta.numRatings > 0
+            ? Array(meta.numRatings).fill(meta.rating)   // approximate
+            : [];
+    }
+
+    // Push the new individual rating
+    meta.ratings.push(userRating);
+
+    // Recalculate running average (rounded to 1 decimal)
+    const sum = meta.ratings.reduce((acc, r) => acc + r, 0);
+    meta.numRatings = meta.ratings.length;
+    meta.rating = Math.round((sum / meta.numRatings) * 10) / 10;
+
+    // Persist back
+    bookMetadata.set(isbn, meta);
+    saveMetadata();
+
+    console.log(`Rated book ${isbn}: new avg ${meta.rating} from ${meta.numRatings} ratings`);
+    res.json({ success: true, isbn, rating: meta.rating, numRatings: meta.numRatings });
 });
 
 app.post('/api/chat', async (req, res) => {

@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "concurrently --kill-others-on-fail --names \"FRONTEND,BACKEND\" --prefix-colors \"cyan,magenta\" \"vite\" \"node server/index.js\""
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "vite": "^7.3.1"
   }
 }

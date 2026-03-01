@@ -44,6 +44,35 @@ for (let i = 0; i < 194; i++) {
 
 // --- USER FEEDBACK SYSTEM ---
 let userRatings = []; // Stores { isbn, rating, genre }
+const ratedIsbns = new Set(); // Guard: prevent rating same book twice per session
+
+// --- TOAST NOTIFICATION ---
+function showToast(message, type = 'success') {
+  let toast = document.getElementById('rating-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'rating-toast';
+    toast.style.cssText = `
+      position: fixed; bottom: 2rem; right: 2rem; z-index: 9999;
+      padding: 0.85rem 1.4rem; border-radius: 12px; font-size: 0.9rem;
+      font-weight: 600; color: #fff; opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform: translateY(10px); pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    `;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.style.background = type === 'success'
+    ? 'linear-gradient(135deg, #11998e, #38ef7d)'
+    : 'linear-gradient(135deg, #f7971e, #ffd200)';
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateY(0)';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+  }, 3000);
+}
 
 const RecommendationEngine = {
   getPopularBooks() {
@@ -217,17 +246,55 @@ pdfUploadInput.addEventListener('change', async (e) => {
   }
 });
 
-submitRatingBtn.addEventListener('click', () => {
+submitRatingBtn.addEventListener('click', async () => {
   if (selectedUserRating > 0 && activeBook) {
-    userRatings.push({
-      isbn: activeBook.isbn,
-      rating: selectedUserRating,
-      genre: activeBook.genre
-    });
+    // Guard: don't let the same user rate the same book twice in one session
+    if (ratedIsbns.has(activeBook.isbn)) {
+      showToast('You already rated this book!', 'warn');
+      ratingPrompt.classList.remove('active');
+      selectedUserRating = 0;
+      promptStars.forEach(s => s.classList.remove('selected'));
+      return;
+    }
+
+    const bookRef = activeBook; // capture reference before async
+    const userScore = selectedUserRating;
+
+    // Optimistically update local state
+    userRatings.push({ isbn: bookRef.isbn, rating: userScore, genre: bookRef.genre });
+    ratedIsbns.add(bookRef.isbn);
     ratingPrompt.classList.remove('active');
-    handleSearch();
     selectedUserRating = 0;
     promptStars.forEach(s => s.classList.remove('selected'));
+
+    // Persist to backend & update the book in LIBRARY_INVENTORY
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isbn: bookRef.isbn, userRating: userScore })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        // Find the book in the live inventory and update its stats
+        const inventoryBook = LIBRARY_INVENTORY.find(b => b.isbn === bookRef.isbn);
+        if (inventoryBook) {
+          inventoryBook.numRatings = data.numRatings;
+          inventoryBook.rating = data.rating;
+        }
+        showToast(`⭐ You rated "${bookRef.title}" ${userScore}/5 — Thanks!`);
+      } else {
+        showToast('Rating saved locally only (server error).', 'warn');
+      }
+    } catch (e) {
+      // Server offline — still keep local recommendation logic working
+      showToast('Rating saved locally (backend offline).', 'warn');
+      console.warn('Rating API error:', e);
+    }
+
+    // Re-render so Popular / Personalized sections update
+    handleSearch();
   }
 });
 
@@ -303,7 +370,7 @@ function createBookCard(book, index) {
         <span class="book-year">${book.year} • ISBN: ${book.isbn.slice(-4)}</span>
         <div class="rating-pill">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-          ${book.rating}
+          ${book.rating} <span style="opacity:0.65;font-size:0.75em;">&middot; ${book.numRatings.toLocaleString()}</span>
         </div>
       </div>
       <p class="book-summary">${book.summary}</p>
